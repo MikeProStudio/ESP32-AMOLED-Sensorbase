@@ -1,0 +1,15 @@
+# Tiefgreifendes Ignorieren für ESP32/PlatformIO
+**/.pio/
+**/build/
+**/.vscode/
+**/.git/
+
+# Dokumentation und riesige Lib-Ordner (falls du sie lokal hast)
+**/docs/
+**/examples/
+
+# Verhindere das Scannen von Datenbanken, die Cursor selbst anlegt
+.cursor_ignore
+*.db
+*.db-journal
+*.sqlite3

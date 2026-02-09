@@ -1,0 +1,12 @@
+# Token-Saving Rules
+Never read or index the following directories:
+.pio/
+node_modules/
+dist/
+build/
+.vscode/
+
+# Project Strategy
+1. Always check 'platformio.ini' first for environment setup.
+2. Use 'pio run' in the terminal to verify success, don't trust code analysis alone.
+3. If an error occurs, only read the specific source files mentioned in the compiler output.

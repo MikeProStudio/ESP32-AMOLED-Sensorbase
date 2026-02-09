@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32-S3 Sensor Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --bg: #0a0a0a; --card: #161616; --text: #e0e0e0; --accent: #00e5ff; --success: #00ff7f; --danger: #ff5252; --warn: #ffd700; --radar: #9d00ff; --radar-light: #d699ff; }
+        body { font-family: 'Segoe UI', Roboto, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        h1 { color: var(--accent); font-weight: 300; text-align: center; text-transform: uppercase; letter-spacing: 3px; }
+        
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        .column { display: flex; flex-direction: column; gap: 20px; }
+        
+        .card { 
+            background-color: var(--card); 
+            padding: 20px; 
+            border-radius: 15px; 
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5); 
+            border: 1px solid #222;
+            text-align: center;
+            /* Animationen für die Karten */
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .card:hover { 
+            transform: translateY(-5px); 
+            border-color: var(--accent);
+        }
+
+        .card h3 { margin: 0 0 12px; font-size: 0.7rem; color: #777; text-transform: uppercase; letter-spacing: 1.5px; }
+        .value { font-size: 2.4rem; font-weight: bold; color: var(--success); line-height: 1; }
+        .unit { font-size: 0.9rem; color: #555; margin-top: 5px; display: block; }
+        .sub-info { font-size: 1.1rem; color: var(--accent); margin: 8px 0; font-weight: 500; }
+
+        .chart-grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 20px; 
+            max-width: 1300px; 
+            margin: 25px auto; 
+        }
+        .chart-container { background: var(--card); padding: 15px; border-radius: 15px; height: 280px; border: 1px solid #222; }
+        .chart-container-mini { background: var(--card); padding: 10px; border-radius: 10px; height: 80px; border: 1px solid #222; margin-top: 15px; }
+        
+        .footer { text-align: center; margin-top: 30px; padding: 20px; color: #444; border-top: 1px solid #1a1a1a; font-size: 0.85rem; }
+        
+        @media (max-width: 900px) {
+            .dashboard-container { grid-template-columns: 1fr; }
+            .chart-grid { grid-template-columns: 1fr; }
+        }
+
+        @keyframes blink-red {
+            0% { background-color: var(--card); }
+            50% { background-color: rgba(255, 0, 0, 0.4); }
+            100% { background-color: var(--card); }
+        }
+        .radar-blink {
+            animation: blink-red 0.1s infinite;
+            border-color: var(--danger) !important;
+        }
+    </style>
+</head>
+<body>
+    <h1>ESP32-S3 Webserver Dashboard</h1>
+    
+    <div class="dashboard-container">
+        <div class="column">
+            <div class="card">
+                <h3>Light Intensity</h3>
+                <div class="value" id="lux">--</div>
+                <span class="unit">Lux</span>
+            </div>
+            <div class="card">
+                <h3>Gyroscope</h3>
+                <div class="sub-info">Pitch: <span id="pitch">--</span>°</div>
+                <div class="sub-info">Roll: <span id="roll">--</span>°</div>
+                <span class="unit">Orientation</span>
+            </div>
+            <div class="card">
+                <h3>Battery Status</h3>
+                <div class="value" id="bat_pct" style="color:var(--warn)">--</div>
+                <span class="unit">% (<span id="bat_v">--</span>V)</span>
+            </div>
+        </div>
+
+        <div class="column">
+            <div class="card" style="flex: 1; display: flex; flex-direction: column; justify-content: center; border-color: var(--success);">
+                <h3>Air Quality Index</h3>
+                <div class="value" id="aqi" style="font-size: 4.5rem;">--</div>
+                <span class="unit">AQI Score</span>
+            </div>
+            <div class="card">
+                <h3>Gas Analysis</h3>
+                <div class="sub-info">NOx: <span id="nox" style="color:var(--warn)">--</span></div>
+                <div class="sub-info">VOC: <span id="voc" style="color:var(--warn)">--</span></div>
+                <span class="unit">Particles & Gases</span>
+            </div>
+        </div>
+
+        <div class="column">
+            <div class="card">
+                <h3>Temperature</h3>
+                <div class="value" id="temp" style="color: var(--danger);">--</div>
+                <span class="unit">&deg;C</span>
+            </div>
+            <div class="card">
+                <h3>Pressure</h3>
+                <div class="value" id="pres">--</div>
+                <span class="unit">bar</span>
+            </div>
+            <div class="card">
+                <h3>Humidity</h3>
+                <div class="value" id="hum" style="color: var(--accent);">--</div>
+                <span class="unit">% rF</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="chart-grid">
+        <div class="chart-container"><canvas id="envChart"></canvas></div>
+        <div class="chart-container"><canvas id="airChart"></canvas></div>
+    </div>
+
+    <h1 style="margin-top: 40px;">24GHz mmWave-Radar Detection</h1>
+    <div class="dashboard-container" style="grid-template-columns: 1fr 2fr; margin-bottom: 30px;">
+        <div class="column">
+            <div id="radar-card" class="card" style="border-color: #333; height: 100%; min-height: 220px; display: flex; flex-direction: column; justify-content: center;">
+                <h3>Presence Status</h3>
+                <div class="value" id="radar_status" style="font-size: 4.5rem; color: #444;">CLEAR</div>
+                <span class="unit" id="radar_dist_label" style="font-size: 1.2rem; margin-top: 10px;">No target in range</span>
+            </div>
+        </div>
+        <div class="column">
+            <div class="card" style="height: 100%; min-height: 220px;">
+                <h3>Distance tracking</h3>
+                <div class="chart-container" style="height: 230px; background: transparent; border: none;"><canvas id="radarChart"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <h1 style="margin-top: 40px;">Wireless Connection</h1>
+    <div class="dashboard-container">
+        <div class="column">
+            <div class="card">
+                <h3>Signal Strength</h3>
+                <div class="value" id="rssi_pct_new">--</div>
+                <span class="unit">% (<span id="rssi_new">--</span> dBm)</span>
+                <div class="chart-container-mini"><canvas id="rssiChart"></canvas></div>
+            </div>
+        </div>
+        <div class="column">
+            <div class="card">
+                <h3>Data Rate</h3>
+                <div class="value" id="data_rate" style="font-size: 2rem;">&darr;<span id="down_new">--</span> &uarr;<span id="up_new">--</span></div>
+                <span class="unit">Mbit/s</span>
+                <div class="chart-container-mini"><canvas id="speedChart"></canvas></div>
+            </div>
+        </div>
+        <div class="column">
+             <div class="card">
+                <h3>WiFi Info</h3>
+                <div class="sub-info">Frequency: <span id="freq">--</span> MHz</div>
+                <div class="sub-info">Channel: <span id="chan">--</span></div>
+                 <div class="chart-container-mini" style="background: var(--card); border-color: #222;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer" style="margin-top: 50px; padding: 30px; text-align: center; border-top: 1px solid #222; clear: both;">
+        <span style="color: #888;">IP:</span> 
+        <span id="ip" style="color:var(--accent); font-weight: bold; margin-right: 15px;">--</span>
+            
+        <span style="color: #888;">Developed by:</span>
+        <a href="https://github.com/MikeProStudio" target="_blank" style="color:var(--success); text-decoration: none; font-weight: 500; border-bottom: 1px solid rgba(0,255,127,0.3);">
+            @MikeProStudio
+        </a>
+    </div>
+
+    <script>
+        const ctxEnv = document.getElementById('envChart').getContext('2d');
+        const ctxAir = document.getElementById('airChart').getContext('2d');
+        const ctxRssi = document.getElementById('rssiChart').getContext('2d');
+        const ctxSpeed = document.getElementById('speedChart').getContext('2d');
+        const ctxRadar = document.getElementById('radarChart').getContext('2d');
+        Chart.defaults.color = '#666';
+
+        // Verbesserte Chart-Konfiguration
+        const chartConfig = {
+            responsive: true, maintainAspectRatio: false,
+            animation: { 
+                duration: 1000, 
+                easing: 'easeOutQuart' 
+            },
+            scales: { 
+                x: { grid: { display: false } }, 
+                y: { grid: { color: '#1f1f1f' } } 
+            },
+            plugins: { legend: { position: 'top', labels: { boxWidth: 10, color: '#aaa' } } },
+            elements: { line: { tension: 0.4 } }
+        };
+
+        const miniChartConfig = {
+            responsive: true, maintainAspectRatio: false,
+            animation: false,
+            scales: {
+                x: {
+                    display: true,
+                    grid: { display: false },
+                    ticks: { color: '#666', maxTicksLimit: 3, font: { size: 10 } }
+                },
+                y: {
+                    display: true,
+                    grid: { color: '#1f1f1f' },
+                    ticks: { color: '#666', maxTicksLimit: 3, font: { size: 10 } }
+                }
+            },
+            plugins: { legend: { display: false } },
+            elements: { line: { tension: 0.4, borderWidth: 2 }, point: { radius: 0 } }
+        };
+
+        const envChart = new Chart(ctxEnv, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label: 'Temp', borderColor: '#ff5252', data: [], fill: true, backgroundColor: 'rgba(255, 82, 82, 0.1)', borderWidth: 2, yAxisID: 'y' },
+                { label: 'Hum', borderColor: '#00e5ff', data: [], fill: true, backgroundColor: 'rgba(0, 229, 255, 0.05)', borderWidth: 2, yAxisID: 'y1' }
+            ]},
+            options: {
+                ...chartConfig,
+                scales: {
+                    x: chartConfig.scales.x,
+                    y: {
+                        ...chartConfig.scales.y,
+                        position: 'left',
+                        ticks: { color: '#ff5252' }
+                    },
+                    y1: {
+                        ...chartConfig.scales.y,
+                        position: 'right',
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: '#00e5ff' }
+                    }
+                }
+            }
+        });
+
+        const airChart = new Chart(ctxAir, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label: 'AQI', borderColor: '#00ff7f', data: [], fill: true, backgroundColor: 'rgba(0, 255, 127, 0.1)', borderWidth: 2, yAxisID: 'y' },
+                { label: 'Lux', borderColor: '#ffd700', data: [], fill: true, backgroundColor: 'rgba(255, 215, 0, 0.05)', borderWidth: 2, yAxisID: 'y1' }
+            ]},
+            options: {
+                ...chartConfig,
+                scales: {
+                    x: chartConfig.scales.x,
+                    y: {
+                        ...chartConfig.scales.y,
+                        position: 'left',
+                        ticks: { color: '#00ff7f' }
+                    },
+                    y1: {
+                        ...chartConfig.scales.y,
+                        position: 'right',
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: '#ffd700' }
+                    }
+                }
+            }
+        });
+
+        function calcMinMax(arr, clampMin = null, clampMax = null) {
+            if(!arr || arr.length === 0) return null;
+
+            let hasValue = false;
+            let min = 0;
+            let max = 0;
+
+            for(let i = 0; i < arr.length; i++) {
+                const v = arr[i];
+                if(v === null || v === undefined) continue;
+                if(!Number.isFinite(v)) continue;
+                if(clampMin !== null && v < clampMin) continue; // treat negatives/sentinels as "no data"
+
+                if(!hasValue) {
+                    min = v;
+                    max = v;
+                    hasValue = true;
+                } else {
+                    if(v < min) min = v;
+                    if(v > max) max = v;
+                }
+            }
+
+            if(!hasValue) return null;
+
+            if(clampMin !== null) min = Math.max(min, clampMin);
+            if(clampMax !== null) max = Math.min(max, clampMax);
+
+            if(max < min) max = min;
+
+            // small padding (avoid 0-range)
+            let pad = (max - min) * 0.1;
+            if(pad === 0) pad = Math.max(1, Math.abs(max) * 0.05);
+
+            return { min: min - pad, max: max + pad };
+        }
+
+        const rssiChart = new Chart(ctxRssi, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'RSSI', borderColor: '#00e5ff', data: [] }] },
+            options: miniChartConfig
+        });
+
+        const speedChart = new Chart(ctxSpeed, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label: 'Down', borderColor: '#00ff7f', data: [] },
+                { label: 'Up', borderColor: '#ff5252', data: [] }
+            ]},
+            options: miniChartConfig
+        });
+
+        const radarChart = new Chart(ctxRadar, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Distance (cm)', borderColor: '#9d00ff', data: [], fill: true, backgroundColor: 'rgba(157, 0, 255, 0.1)', borderWidth: 2 }] },
+            options: {
+                ...miniChartConfig,
+                animation: { 
+                    duration: 400, 
+                    easing: 'easeOutQuart' 
+                },
+                scales: {
+                    x: miniChartConfig.scales.x,
+                    y: {
+                        ...miniChartConfig.scales.y,
+                        min: 0,
+                        max: 300,
+                        ticks: { color: '#9d00ff', maxTicksLimit: 5, font: { size: 10 } },
+                        grid: { color: 'rgba(157, 0, 255, 0.1)' }
+                    }
+                }
+            }
+        });
+
+        let ws;
+        function initWebSocket() {
+            ws = new WebSocket(`ws://${window.location.hostname}/ws`);
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'radar') {
+                    updateRadarUI(data.dist, data.person);
+                    updateRadarChart(data.dist, data.person);
+                }
+            };
+            ws.onclose = () => setTimeout(initWebSocket, 2000);
+        }
+
+        let blinkTimeout;
+        function updateRadarUI(dist, person) {
+            const radarStatus = document.getElementById('radar_status');
+            const radarCard = document.getElementById('radar-card');
+            const radarDistLabel = document.getElementById('radar_dist_label');
+            
+            if(person) {
+                const wasClear = radarStatus.innerText === "CLEAR";
+                radarStatus.innerText = "DETECTED";
+                radarStatus.style.color = "var(--radar-light)";
+                radarCard.style.borderColor = "var(--radar)";
+                radarCard.style.boxShadow = "0 0 30px rgba(157, 0, 255, 0.4)";
+                radarDistLabel.innerText = dist.toFixed(0) + " cm";
+                radarDistLabel.style.color = "var(--radar-light)";
+                
+                if (wasClear) {
+                    radarCard.classList.add('radar-blink');
+                    clearTimeout(blinkTimeout);
+                    blinkTimeout = setTimeout(() => {
+                        radarCard.classList.remove('radar-blink');
+                    }, 3000);
+                }
+            } else {
+                clearTimeout(blinkTimeout);
+                radarCard.classList.remove('radar-blink');
+                radarStatus.innerText = "CLEAR";
+                radarStatus.style.color = "#444";
+                radarCard.style.borderColor = "#222";
+                radarCard.style.boxShadow = "none";
+                radarDistLabel.innerText = "No target in range";
+                radarDistLabel.style.color = "#777";
+            }
+        }
+
+        function updateRadarChart(dist, person) {
+            let now = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+            
+            if(radarChart.data.labels.length > 40) { // Mehr Punkte für 250ms Auflösung
+                radarChart.data.labels.shift();
+                radarChart.data.datasets.forEach(d => d.data.shift());
+            }
+            radarChart.data.labels.push(now);
+            radarChart.data.datasets[0].data.push(person ? dist : null);
+            radarChart.update('none'); // Update ohne große Animation für High-Freq, CSS/ChartConfig regelt Smoothness
+        }
+
+        function fetchData() {
+            fetch('/data').then(res => res.json()).then(data => {
+                document.getElementById('temp').innerText = data.temp.toFixed(1);
+                document.getElementById('hum').innerText = data.hum.toFixed(0);
+                document.getElementById('pres').innerText = data.pres.toFixed(2);
+                document.getElementById('aqi').innerText = data.aqi;
+                document.getElementById('nox').innerText = data.nox;
+                document.getElementById('voc').innerText = data.voc;
+                document.getElementById('lux').innerText = data.lux.toFixed(0);
+                document.getElementById('pitch').innerText = data.pitch.toFixed(1);
+                document.getElementById('roll').innerText = data.roll.toFixed(1);
+                document.getElementById('bat_pct').innerText = data.bat_pct;
+                document.getElementById('bat_v').innerText = data.bat_v.toFixed(2);
+                document.getElementById('rssi_new').innerText = data.rssi;
+                document.getElementById('rssi_pct_new').innerText = data.rssi_pct;
+                document.getElementById('down_new').innerText = data.down.toFixed(1);
+                document.getElementById('up_new').innerText = data.up.toFixed(1);
+                document.getElementById('freq').innerText = data.freq;
+                document.getElementById('chan').innerText = data.chan;
+                document.getElementById('ip').innerText = window.location.hostname;
+
+                // Radar UI wird nun primär über WebSocket (updateRadarUI) aktualisiert,
+                // hier nur Backup für den Fall, dass WS nicht verbunden ist.
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    updateRadarUI(data.radar_dist, data.person);
+                }
+
+                let now = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+                
+                [envChart, airChart, rssiChart, speedChart].forEach(c => {
+                    if(c.data.labels.length > 30) {
+                        c.data.labels.shift();
+                        c.data.datasets.forEach(d => d.data.shift());
+                    }
+                    c.data.labels.push(now);
+                });
+
+                envChart.data.datasets[0].data.push(data.temp);
+                envChart.data.datasets[1].data.push(data.hum);
+                const aqiVal = (Number.isFinite(data.aqi) && data.aqi >= 0) ? data.aqi : null;
+                airChart.data.datasets[0].data.push(aqiVal);
+                airChart.data.datasets[1].data.push(data.lux);
+                rssiChart.data.datasets[0].data.push(data.rssi_pct);
+                speedChart.data.datasets[0].data.push(data.down);
+                speedChart.data.datasets[1].data.push(data.up);
+
+                // Dynamic scaling for dual axes (based on current ring buffer)
+                const tMM = calcMinMax(envChart.data.datasets[0].data);
+                const hMM = calcMinMax(envChart.data.datasets[1].data, 0, 100);
+                const aqiMM = calcMinMax(airChart.data.datasets[0].data, 0, null);
+                const luxMM = calcMinMax(airChart.data.datasets[1].data, 0, null);
+                if(tMM) { envChart.options.scales.y.min = tMM.min; envChart.options.scales.y.max = tMM.max; }
+                if(hMM) { envChart.options.scales.y1.min = hMM.min; envChart.options.scales.y1.max = hMM.max; }
+                if(aqiMM) {
+                    airChart.options.scales.y.min = aqiMM.min;
+                    airChart.options.scales.y.max = aqiMM.max;
+                } else {
+                    // Ensure axis and legend render even if AQI has no valid samples yet
+                    airChart.options.scales.y.min = 0;
+                    airChart.options.scales.y.max = 500;
+                }
+                if(luxMM) { airChart.options.scales.y1.min = luxMM.min; airChart.options.scales.y1.max = luxMM.max; }
+
+                // Update OHNE 'none', um Animationen zu aktivieren
+                envChart.update(); 
+                airChart.update();
+                rssiChart.update();
+                speedChart.update();
+            });
+        }
+        
+        // Intervall auf 1000ms verkürzt für flüssigere Optik
+        setInterval(fetchData, 1000);
+        fetchData();
+        initWebSocket();
+    </script>
+</body>
+</html>
