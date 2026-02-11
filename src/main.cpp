@@ -15,6 +15,7 @@
 #include "crypto_logic.h" 
 #include "data_manager.h" 
 #include "web_server.h"
+#include "ble_long_range.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -153,6 +154,9 @@ void setup() {
         Serial.println(WiFi.localIP());
     }
 
+    // BLE Long Range initialisieren
+    init_ble_long_range();
+
     request_timeframe_update = 0; 
     update_btc_price();
     
@@ -180,6 +184,9 @@ void loop() {
     get_sensor_readings(&lux, &aqi, &voc, &nox, &temp, &hum, &pres, &gx, &gy, &gz, &pitch, &roll);
     update_ui_and_brightness(lux, aqi, voc, nox, temp, hum, pres, gx, gy, gz, pitch, roll, radar_distance, person_in_range);
     update_wifi_status_logic();
+
+    // BLE Telemetrie aktualisieren (Long Range) mit allen Sensorwerten
+    update_ble_telemetry(0.0f, gx, gy, gz, lux, aqi, temp, hum, pres, radar_distance);
 
     if (person_in_range != last_person_in_range) {
         last_person_in_range = person_in_range; // Zuerst speichern!

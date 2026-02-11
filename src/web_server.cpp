@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include "web_ui_updater.h"
+#include "ble_long_range.h"
 
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
@@ -74,6 +75,12 @@ void init_webserver() {
         doc["radar_dist"] = _radar_dist;
         doc["person"] = _person_detected;
         
+        // Bluetooth Daten hinzufügen
+        doc["ble_conn"] = is_ble_connected();
+        doc["ble_rssi"] = get_ble_rssi();
+        doc["ble_client"] = get_ble_client_name();
+        doc["ble_mode"] = "LE Coded PHY (S=8)";
+
         String json;
         serializeJson(doc, json);
         request->send(200, "application/json", json);

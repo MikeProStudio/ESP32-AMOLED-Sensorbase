@@ -1,6 +1,7 @@
 #include "ui_app.h"
-#include <stdio.h> 
+#include <stdio.h>
 #include <Arduino.h>
+#include "ble_long_range.h"
 
 static lv_obj_t * label_btc_usd = NULL;
 static lv_obj_t * label_btc_eur = NULL;
@@ -208,9 +209,9 @@ static void create_info_tab(lv_obj_t * tab) {
     lv_obj_set_flex_align(tab, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     
     label_wifi_info = lv_label_create(tab);
-    lv_obj_set_style_text_font(label_wifi_info, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(label_wifi_info, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_color(label_wifi_info, lv_color_white(), 0);
-    lv_obj_align(label_wifi_info, LV_ALIGN_TOP_LEFT, 20, 10);
+    lv_obj_align(label_wifi_info, LV_ALIGN_TOP_LEFT, 20, 5);
     lv_label_set_text(label_wifi_info, "WLAN Status\nChecking...");
 }
 
@@ -231,16 +232,27 @@ static void create_qr_tab(lv_obj_t * tab) {
 extern "C" {
     void ui_update_wifi_info(const char* ssid, int rssi_pct, float down_speed, float up_speed, int freq, int channel, const char* status, const char* ip, const char* uptime, float bat_v, int bat_pct) {
         if (!label_wifi_info) return;
-        char buf[512];
-        snprintf(buf, sizeof(buf), 
+        char buf[1024];
+
+        // Bluetooth Status holen
+        bool ble_conn = is_ble_connected();
+        int ble_rssi = get_ble_rssi();
+        const char* ble_client = get_ble_client_name();
+
+        snprintf(buf, sizeof(buf),
             "Status: %s (IP: %s)\n"
-            "SSID: %s\n"
-            "Signal: %d%%\n"
-            "Speed: %s %.1f Mbit/s   %s %.1f Mbit/s\n"
+            "SSID: %s | Sig: %d%%\n"
+            "Spd: %s%.1f %s%.1f Mbit/s\n"
             "Freq: %d MHz (Ch %d)\n"
+            "-----------------------------\n"
+            "BLE: %s (%d dBm)\n"
+            "Client: %s\n"
+            "Mode: LE Coded PHY (S=8)\n"
+            "-----------------------------\n"
             "Uptime: %s\n"
             "Battery: %.2fV (%d%%) %s",
-            status, ip, ssid, rssi_pct, LV_SYMBOL_DOWNLOAD, down_speed, LV_SYMBOL_UPLOAD, up_speed, freq, channel, uptime, bat_v, bat_pct, LV_SYMBOL_CHARGE);
+            status, ip, ssid, rssi_pct, LV_SYMBOL_DOWNLOAD, down_speed, LV_SYMBOL_UPLOAD, up_speed, freq, channel,
+            ble_conn ? "CONNECTED" : "ADVERTISING", ble_rssi, ble_client, uptime, bat_v, bat_pct, LV_SYMBOL_CHARGE);
         lv_label_set_text(label_wifi_info, buf);
     }
 

@@ -148,7 +148,7 @@
     </div>
 
     <h1 style="margin-top: 40px;">Wireless Connection</h1>
-    <div class="dashboard-container">
+    <div class="dashboard-container" style="margin-bottom: 30px;">
         <div class="column">
             <div class="card">
                 <h3>Signal Strength</h3>
@@ -175,6 +175,30 @@
         </div>
     </div>
 
+    <h1 style="margin-top: 40px;">Bluetooth LE Coded PHY (Long Range)</h1>
+    <div class="dashboard-container" style="grid-template-columns: 1fr 2fr;">
+        <div class="column">
+            <div class="card" style="border-color: var(--accent); height: 100%;">
+                <h3>BLE Status</h3>
+                <div class="value" id="ble_conn" style="font-size: 2.2rem; margin-top: 20px;">ADVERTISING</div>
+                <span class="unit" id="ble_mode" style="margin-bottom: 20px;">LE Coded PHY (S=8)</span>
+                
+                <h3 style="border-top: 1px solid #222; padding-top: 15px;">Signal Strength</h3>
+                <div class="value" id="ble_rssi" style="font-size: 2.5rem; color: var(--accent);">--</div>
+                <span class="unit">dBm</span>
+
+                <h3 style="border-top: 1px solid #222; padding-top: 15px;">Connected Peer</h3>
+                <div id="ble_client" style="font-size: 1.1rem; color: var(--text); overflow: hidden; text-overflow: ellipsis;">None</div>
+            </div>
+        </div>
+        <div class="column">
+            <div class="card" style="height: 100%;">
+                <h3>BLE RSSI History (250ms interval)</h3>
+                <div class="chart-container" style="height: 280px; background: transparent; border: none;"><canvas id="bleRssiChart"></canvas></div>
+            </div>
+        </div>
+    </div>
+
     <div class="footer" style="margin-top: 50px; padding: 30px; text-align: center; border-top: 1px solid #222; clear: both;">
         <span style="color: #888;">IP:</span> 
         <span id="ip" style="color:var(--accent); font-weight: bold; margin-right: 15px;">--</span>
@@ -191,6 +215,7 @@
         const ctxRssi = document.getElementById('rssiChart').getContext('2d');
         const ctxSpeed = document.getElementById('speedChart').getContext('2d');
         const ctxRadar = document.getElementById('radarChart').getContext('2d');
+        const ctxBleRssi = document.getElementById('bleRssiChart').getContext('2d');
         Chart.defaults.color = '#666';
 
         // Verbesserte Chart-Konfiguration
@@ -351,6 +376,29 @@
             }
         });
 
+        const bleRssiChart = new Chart(ctxBleRssi, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'RSSI', borderColor: '#00e5ff', data: [], fill: true, backgroundColor: 'rgba(0, 229, 255, 0.1)', borderWidth: 2 }] },
+            options: {
+                ...miniChartConfig,
+                animation: { duration: 250, easing: 'linear' },
+                scales: {
+                    x: {
+                        ...miniChartConfig.scales.x,
+                        display: true,
+                        ticks: { color: '#666', maxTicksLimit: 5, font: { size: 9 } }
+                    },
+                    y: {
+                        ...miniChartConfig.scales.y,
+                        min: -120, max: 30,
+                        title: { display: true, text: 'RSSI (dBm)', color: '#00e5ff', font: { size: 10 } },
+                        ticks: { color: '#00e5ff', stepSize: 20 },
+                        grid: { color: 'rgba(0, 229, 255, 0.05)' }
+                    }
+                }
+            }
+        });
+
         let ws;
         function initWebSocket() {
             ws = new WebSocket(`ws://${window.location.hostname}/ws`);
@@ -412,6 +460,8 @@
 
         function fetchData() {
             fetch('/data').then(res => res.json()).then(data => {
+                const now = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+                
                 document.getElementById('temp').innerText = data.temp.toFixed(1);
                 document.getElementById('hum').innerText = data.hum.toFixed(0);
                 document.getElementById('pres').innerText = data.pres.toFixed(2);
@@ -431,14 +481,30 @@
                 document.getElementById('chan').innerText = data.chan;
                 document.getElementById('ip').innerText = window.location.hostname;
 
+                // BLE UI Update
+                const bleConn = document.getElementById('ble_conn');
+                bleConn.innerText = data.ble_conn ? "CONNECTED" : "ADVERTISING";
+                bleConn.style.color = data.ble_conn ? "var(--success)" : "var(--warn)";
+                document.getElementById('ble_rssi').innerText = data.ble_rssi;
+                document.getElementById('ble_client').innerText = data.ble_client;
+                document.getElementById('ble_mode').innerText = data.ble_mode;
+
+                // Update BLE Chart
+                // Wir pushen auch Daten wenn nicht verbunden (null), damit die Zeitachse weiterläuft
+                if (bleRssiChart.data.labels.length > 60) { // 15 Sekunden History bei 250ms
+                    bleRssiChart.data.labels.shift();
+                    bleRssiChart.data.datasets[0].data.shift();
+                }
+                bleRssiChart.data.labels.push(now);
+                bleRssiChart.data.datasets[0].data.push(data.ble_conn ? data.ble_rssi : null);
+                bleRssiChart.update('none');
+
                 // Radar UI wird nun primär über WebSocket (updateRadarUI) aktualisiert,
                 // hier nur Backup für den Fall, dass WS nicht verbunden ist.
                 if (!ws || ws.readyState !== WebSocket.OPEN) {
                     updateRadarUI(data.radar_dist, data.person);
                 }
 
-                let now = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-                
                 [envChart, airChart, rssiChart, speedChart].forEach(c => {
                     if(c.data.labels.length > 30) {
                         c.data.labels.shift();
@@ -481,8 +547,8 @@
             });
         }
         
-        // Intervall auf 1000ms verkürzt für flüssigere Optik
-        setInterval(fetchData, 1000);
+        // Intervall auf 250ms für High-Speed Telemetrie (BLE RSSI & Radar)
+        setInterval(fetchData, 250);
         fetchData();
         initWebSocket();
     </script>
