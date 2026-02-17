@@ -57,5 +57,6 @@ Scan the generated QR code to access the high-speed Web-UI (ensure your device i
 
 4. You will endup on the Web Dashboard:
 <img width="1469" height="1219" alt="image" src="https://github.com/user-attachments/assets/cc339a1f-e0d8-4d20-a55e-84150cb70315" />
-<img width="1492" height="900" alt="image" src="https://github.com/user-attachments/assets/ba8d72dd-eeba-4ef9-8fe0-90516165e654" />
+<img width="1526" height="806" alt="image" src="https://github.com/user-attachments/assets/2b42d55f-bef6-46e3-978b-5b341e86bd30" />
+
 
