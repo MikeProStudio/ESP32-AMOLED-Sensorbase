@@ -36,5 +36,26 @@ This implementation uses **LE Coded PHY (S=8)**:
 ## Telemetry Analysis
 The Web-UI provides a precision RSSI graph (-120 dBm to +30 dBm) to analyze signal stability during field tests. The ESP32 implements **exponential smoothing** to ensure readable values even in harsh RF environments.
 
+Developed for high-performance telemetry on open water.
 ---
-Developed for high-performance telemetry on open water. 🤙
+
+## UI Documentation & Visuals
+1. Main Telemetry Dashboard
+Real-time sensor data including Speed, G-Force, and environmental metrics displayed on the AMOLED panel.
+
+
+![20260217_210533](https://github.com/user-attachments/assets/8270c394-6042-43ee-8a11-7e67026d5cc9)
+
+2. Wireless Info & Connectivity Status
+The "INFO" tab displays critical BLE Long Range parameters, connection status, and the smoothed RSSI signal strength.
+
+![20260217_210522](https://github.com/user-attachments/assets/1356e972-1e89-484a-92be-2445b54c96fa)
+
+3. Web Dashboard Access
+Scan the generated QR code to access the high-speed Web-UI (ensure your device is in the same WiFi network).
+![20260217_210850](https://github.com/user-attachments/assets/621f29a5-f7cc-45d2-b99c-e992ac8cc6e6)
+
+4. You will endup on the Web Dashboard:
+<img width="1469" height="1219" alt="image" src="https://github.com/user-attachments/assets/cc339a1f-e0d8-4d20-a55e-84150cb70315" />
+<img width="1492" height="900" alt="image" src="https://github.com/user-attachments/assets/ba8d72dd-eeba-4ef9-8fe0-90516165e654" />
+
