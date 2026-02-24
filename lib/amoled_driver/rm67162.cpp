@@ -14,7 +14,7 @@ const static lcd_cmd_t rm67162_spi_init[] = {
     {0x51, {0x00}, 0x01},        // Write Display Brightness MAX_VAL=0XFF
     {0x11, {0x00}, 0x01 | 0x80}, // Sleep Out
     {0x29, {0x00}, 0x01 | 0x80}, // Display on
-    {0x51, {0xD0}, 0x01},        // Write Display Brightness    MAX_VAL=0XFF
+    {0x51, {0x10}, 0x01},        // Write Display Brightness    MAX_VAL=0XFF - START LOW!
 };
 
 const static lcd_cmd_t rm67162_qspi_init[] = {
@@ -28,7 +28,7 @@ const static lcd_cmd_t rm67162_qspi_init[] = {
     // {0x3A, {0x77},        0x01}, //Interface Pixel Format    24bit/pixel
     {0x51, {0x00}, 0x01}, // Write Display Brightness MAX_VAL=0XFF
     {0x29, {0x00}, 0x80}, // Display on
-    {0x51, {0xD0}, 0x01}, // Write Display Brightness   MAX_VAL=0XFF
+    {0x51, {0x10}, 0x01}, // Write Display Brightness   MAX_VAL=0XFF - START LOW!
 };
 
 static spi_device_handle_t spi;

@@ -1,5 +1,6 @@
 #include "ui_app.h"
 #include <stdio.h>
+#include <string.h>
 #include <Arduino.h>
 #include "ble_long_range.h"
 
@@ -258,8 +259,20 @@ extern "C" {
 
     void ui_update_qr_code(const char* ip_address) {
         if (!tab_qr) return;
-        if (qr_obj) return; // QR Code schon erstellt
-        if(strlen(ip_address) < 7) return; 
+        
+        static char last_ip[32] = "";
+        
+        // Ignoriere ungültige, "0.0.0.0" oder unveränderte IPs
+        if(strlen(ip_address) < 7 || strcmp(ip_address, "0.0.0.0") == 0) return;
+        if(strcmp(ip_address, last_ip) == 0) return;
+        
+        // IP hat sich geändert
+        strncpy(last_ip, ip_address, sizeof(last_ip));
+        
+        if (qr_obj) {
+            lv_obj_del(qr_obj);
+            qr_obj = NULL;
+        }
 
         char url[64];
         snprintf(url, sizeof(url), "http://%s", ip_address);

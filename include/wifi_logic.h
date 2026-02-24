@@ -5,6 +5,7 @@
 #include <Preferences.h>
 
 void init_wifi();
+void wifi_loop();
 void update_wifi_status_logic();
 
 // Getter-Funktionen für WiFi-Metriken (globale Variablen-Zugriff)

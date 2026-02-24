@@ -6,19 +6,29 @@
     <title>ESP32-S3 Sensor Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        * { box-sizing: border-box; }
         :root { --bg: #0a0a0a; --card: #161616; --text: #e0e0e0; --accent: #00e5ff; --success: #00ff7f; --danger: #ff5252; --warn: #ffd700; --radar: #9d00ff; --radar-light: #d699ff; }
-        body { font-family: 'Segoe UI', Roboto, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        body { font-family: 'Segoe UI', Roboto, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; width: 100%; overflow-x: hidden; }
         h1 { color: var(--accent); font-weight: 300; text-align: center; text-transform: uppercase; letter-spacing: 3px; }
         
-        .dashboard-container {
+        .dashboard-container, .chart-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
             gap: 20px;
             max-width: 1300px;
             margin: 0 auto;
+            width: 100%;
         }
 
-        .column { display: flex; flex-direction: column; gap: 20px; }
+        .dashboard-container {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .chart-grid { 
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); 
+            margin: 25px auto; 
+        }
+
+        .column { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
         
         .card { 
             background-color: var(--card); 
@@ -27,35 +37,62 @@
             box-shadow: 0 10px 20px rgba(0,0,0,0.5); 
             border: 1px solid #222;
             text-align: center;
-            /* Animationen für die Karten */
             transition: transform 0.3s ease, border-color 0.3s ease;
+            min-width: 0;
+            width: 100%;
         }
 
         .card:hover { 
             transform: translateY(-5px); 
             border-color: var(--accent);
         }
-
-        .card h3 { margin: 0 0 12px; font-size: 0.7rem; color: #777; text-transform: uppercase; letter-spacing: 1.5px; }
-        .value { font-size: 2.4rem; font-weight: bold; color: var(--success); line-height: 1; }
-        .unit { font-size: 0.9rem; color: #555; margin-top: 5px; display: block; }
-        .sub-info { font-size: 1.1rem; color: var(--accent); margin: 8px 0; font-weight: 500; }
-
-        .chart-grid { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 20px; 
-            max-width: 1300px; 
-            margin: 25px auto; 
-        }
-        .chart-container { background: var(--card); padding: 15px; border-radius: 15px; height: 280px; border: 1px solid #222; }
-        .chart-container-mini { background: var(--card); padding: 10px; border-radius: 10px; height: 80px; border: 1px solid #222; margin-top: 15px; }
-        
-        .footer { text-align: center; margin-top: 30px; padding: 20px; color: #444; border-top: 1px solid #1a1a1a; font-size: 0.85rem; }
-        
+/* ... rest of existing styles ... */
         @media (max-width: 900px) {
-            .dashboard-container { grid-template-columns: 1fr; }
-            .chart-grid { grid-template-columns: 1fr; }
+            body { padding: 10px; }
+            h1 { font-size: 1.2rem; letter-spacing: 1px; margin: 25px auto 15px; max-width: 100%; }
+
+            /* Sensor tiles: 3 columns, more compact */
+            .dashboard-container { 
+                grid-template-columns: repeat(3, minmax(0, 1fr)); 
+                gap: 8px; 
+                padding: 0;
+            }
+            .column { gap: 8px; }
+            .card { padding: 10px 5px; border-radius: 10px; }
+            .card h3 { font-size: 0.55rem; margin-bottom: 6px; letter-spacing: 0.5px; }
+            .value { font-size: 1.2rem; word-break: break-all; }
+            .sub-info { font-size: 0.75rem; margin: 2px 0; }
+            .unit { font-size: 0.65rem; }
+
+            /* Radar and BLE sections stack on mobile */
+            .radar-ble-container { grid-template-columns: 1fr; }
+
+            /* Wireless Connection section 2 columns for the charts side-by-side */
+            .wireless-container { 
+                grid-template-columns: repeat(2, minmax(0, 1fr)); 
+                gap: 8px;
+            }
+            /* Make the third card (WiFi Info) span both columns on mobile if there are 3 cards */
+            .wireless-container > .column:nth-child(3) {
+                grid-column: span 2;
+            }
+
+            /* Main charts: Wide charts (1 column) on mobile for better visibility */
+            .chart-grid { 
+                grid-template-columns: 1fr; 
+                gap: 15px;
+                margin: 20px auto;
+            }
+            
+            .chart-container { padding: 10px; height: 220px; width: 100%; }
+            .chart-container-mini { padding: 5px; height: 70px; margin-top: 8px; width: 100%; }
+            
+            #aqi { font-size: 2.5rem !important; }
+            #radar_status { font-size: 2.5rem !important; }
+            #ble_conn { font-size: 1.5rem !important; }
+
+            .chart-container, .chart-container-mini { transform: translateZ(0); }
+            .footer { padding: 15px; font-size: 0.75rem; margin-top: 30px; }
         }
 
         @keyframes blink-red {
@@ -131,7 +168,7 @@
     </div>
 
     <h1 style="margin-top: 40px;">24GHz mmWave-Radar Detection</h1>
-    <div class="dashboard-container" style="grid-template-columns: 1fr 2fr; margin-bottom: 30px;">
+    <div class="dashboard-container radar-ble-container" style="margin-bottom: 30px;">
         <div class="column">
             <div id="radar-card" class="card" style="border-color: #333; height: 100%; min-height: 220px; display: flex; flex-direction: column; justify-content: center;">
                 <h3>Presence Status</h3>
@@ -142,13 +179,13 @@
         <div class="column">
             <div class="card" style="height: 100%; min-height: 220px;">
                 <h3>Distance tracking</h3>
-                <div class="chart-container" style="height: 230px; background: transparent; border: none;"><canvas id="radarChart"></canvas></div>
+                <div class="chart-container" style="background: transparent; border: none;"><canvas id="radarChart"></canvas></div>
             </div>
         </div>
     </div>
 
     <h1 style="margin-top: 40px;">Wireless Connection</h1>
-    <div class="dashboard-container" style="margin-bottom: 30px;">
+    <div class="dashboard-container wireless-container" style="margin-bottom: 30px;">
         <div class="column">
             <div class="card">
                 <h3>Signal Strength</h3>
@@ -176,7 +213,7 @@
     </div>
 
     <h1 style="margin-top: 40px;">Bluetooth LE Coded PHY (Long Range)</h1>
-    <div class="dashboard-container" style="grid-template-columns: 1fr 2fr;">
+    <div class="dashboard-container radar-ble-container">
         <div class="column">
             <div class="card" style="border-color: var(--accent); height: 100%;">
                 <h3>BLE Status</h3>
@@ -194,7 +231,7 @@
         <div class="column">
             <div class="card" style="height: 100%;">
                 <h3>BLE RSSI History (250ms interval)</h3>
-                <div class="chart-container" style="height: 280px; background: transparent; border: none;"><canvas id="bleRssiChart"></canvas></div>
+                <div class="chart-container" style="background: transparent; border: none;"><canvas id="bleRssiChart"></canvas></div>
             </div>
         </div>
     </div>
@@ -216,8 +253,11 @@
         const ctxSpeed = document.getElementById('speedChart').getContext('2d');
         const ctxRadar = document.getElementById('radarChart').getContext('2d');
         const ctxBleRssi = document.getElementById('bleRssiChart').getContext('2d');
+        
+        // Responsive chart defaults
         Chart.defaults.color = '#666';
-
+        Chart.defaults.font.size = window.innerWidth < 900 ? 9 : 12;
+        
         // Verbesserte Chart-Konfiguration
         const chartConfig = {
             responsive: true, maintainAspectRatio: false,
@@ -540,10 +580,10 @@
                 if(luxMM) { airChart.options.scales.y1.min = luxMM.min; airChart.options.scales.y1.max = luxMM.max; }
 
                 // Update OHNE 'none', um Animationen zu aktivieren
-                envChart.update(); 
-                airChart.update();
-                rssiChart.update();
-                speedChart.update();
+                envChart.update('none'); 
+                airChart.update('none');
+                rssiChart.update('none');
+                speedChart.update('none');
             });
         }
         

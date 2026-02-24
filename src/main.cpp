@@ -16,6 +16,8 @@
 #include "data_manager.h" 
 #include "web_server.h"
 #include "ble_long_range.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -115,6 +117,10 @@ void setup() {
 
     wireMutex = xSemaphoreCreateMutex();
     delay(2000); 
+
+    // DISABLE BROWNOUT DETECTOR
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+
     Serial.println("\n\n--- SAFE BOOT START ---");
     Wire.begin(40, 39);
     Wire.setClock(100000); 
@@ -128,6 +134,9 @@ void setup() {
     rm67162_init(); 
     lcd_setRotation(1);
     lcd_fill(0, 0, 536, 240, 0x001F); 
+    set_amoled_brightness(20); // START WITH LOW BRIGHTNESS TO PREVENT BROWNOUT
+    delay(200);
+
     lv_init();
     size_t buffer_size_pixels = 536 * 40; 
     buf = (lv_color_t *)ps_malloc(buffer_size_pixels * sizeof(lv_color_t));
@@ -145,20 +154,28 @@ void setup() {
     indev_drv.read_cb = my_touchpad_read;
     lv_indev_drv_register(&indev_drv);
     xTaskCreatePinnedToCore(lvgl_loop_task, "lvgl", 20000, NULL, 5, NULL, 1);
+    delay(200); // SPREAD OUT INITIALIZATION SPIKES
+
     init_wifi(); 
+    delay(200); // SPREAD OUT INITIALIZATION SPIKES
     
+    /* Webserver initialization is now handled in wifi_logic.cpp upon connection
     // Webserver starten
     if(WiFi.status() == WL_CONNECTED) {
         init_webserver();
         Serial.print("Webserver IP: ");
         Serial.println(WiFi.localIP());
     }
+    */
+
+    delay(200); // SPREAD OUT INITIALIZATION SPIKES
 
     // BLE Long Range initialisieren
     init_ble_long_range();
+    delay(200); // SPREAD OUT INITIALIZATION SPIKES
 
     request_timeframe_update = 0; 
-    update_btc_price();
+    // update_btc_price(); -> Removed from setup to avoid potential sync issues at boot
     
     // SD Karte deaktiviert
     // SD_card_Init();
@@ -169,6 +186,8 @@ void setup() {
     analogReadResolution(12); //12Bit ADC
     // Erstelle den Radar Task auf Core 0 (LVGL läuft auf Core 1)
     
+    // RESTORE DISPLAY BRIGHTNESS FOR REGULAR OPERATION
+    set_amoled_brightness(255);
 }
 
 
@@ -185,8 +204,15 @@ void loop() {
     update_ui_and_brightness(lux, aqi, voc, nox, temp, hum, pres, gx, gy, gz, pitch, roll, radar_distance, person_in_range);
     update_wifi_status_logic();
 
-    // BLE Telemetrie aktualisieren (Long Range) mit allen Sensorwerten
-    update_ble_telemetry(0.0f, gx, gy, gz, lux, aqi, temp, hum, pres, radar_distance);
+    // Berechne Battery Percentage für BLE (falls nicht schon vorhanden)
+    int raw_adc = analogRead(1);
+    float avg_mv = (float)raw_adc * (3300.0f / 4095.0f);
+    float bat_v = (avg_mv * 2.0f) / 1000.0f;
+    int bat_pct = (int)((bat_v - 3.2f) * 100.0f / (3.7f - 3.2f));
+    if (bat_pct > 100) bat_pct = 100; if (bat_pct < 0) bat_pct = 0;
+
+    // BLE Telemetrie aktualisieren (Long Range) mit allen Sensorwerten inkl. Gyro (Pitch/Roll) & Battery
+    update_ble_telemetry(0.0f, gx, gy, gz, lux, aqi, temp, hum, pres, radar_distance, bat_pct, pitch, roll);
 
     if (person_in_range != last_person_in_range) {
         last_person_in_range = person_in_range; // Zuerst speichern!
@@ -224,7 +250,7 @@ void loop() {
     }
 
     if (millis() - last_print_time > 5000) {
-        Serial.printf("Info: Aktuelle Distanz: %.1f cm (Detected: %s)\n", radar_distance, person_in_range ? "JA" : "NEIN");
+        //Serial.printf("Info: Aktuelle Distanz: %.1f cm (Detected: %s)\n", radar_distance, person_in_range ? "JA" : "NEIN");
         last_print_time = millis();
     }
     vTaskDelay(pdMS_TO_TICKS(1)); 
